@@ -66,6 +66,7 @@ type Config struct {
 			Kafka           IntegrationKafkaConfig      `mapstructure:"kafka"`
 			PostgreSQL      IntegrationPostgreSQLConfig `mapstructure:"postgresql"`
 			AMQP            IntegrationAMQPConfig       `mapstructure:"amqp"`
+			KNoT            IntegrationKNoTConfig       `mapstructure:"knot"`
 		} `mapstructure:"integration"`
 
 		API struct {
@@ -211,6 +212,13 @@ type IntegrationPostgreSQLConfig struct {
 
 // IntegrationAMQPConfig holds the AMQP integration configuration.
 type IntegrationAMQPConfig struct {
+	URL                     string `mapstructure:"url"`
+	EventRoutingKeyTemplate string `mapstructure:"event_routing_key_template"`
+}
+
+// IntegrationKNoTConfig holds the KNoT integration configuration.
+type IntegrationKNoTConfig struct {
+	UserToken               string `mapstructure:"user_token"`
 	URL                     string `mapstructure:"url"`
 	EventRoutingKeyTemplate string `mapstructure:"event_routing_key_template"`
 }

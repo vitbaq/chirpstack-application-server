@@ -242,8 +242,27 @@ id="{{ .ApplicationServer.ID }}"
   # * gcp_pub_sub       - Google Cloud Pub/Sub
   # * kafka             - Kafka distributed streaming platform
   # * postgresql        - PostgreSQL database
+  # * knot              - KNoT Meta-Plataform | Do not enable KNoT and AMQP together
   enabled=[{{ if .ApplicationServer.Integration.Enabled|len }}"{{ end }}{{ range $index, $elm := .ApplicationServer.Integration.Enabled }}{{ if $index }}", "{{ end }}{{ $elm }}{{ end }}{{ if .ApplicationServer.Integration.Enabled|len }}"{{ end }}]
 
+  # KNoT integration
+  [applicantion_server.integration.knot]
+  name = "KNoT LoRaWAN App Server"
+
+  # KNoT User Token.
+  user_token="{{ .ApplicationServer.Integration.KNoT.UserToken }}"
+
+  # Server URL.
+  #
+  # See for a specification of all the possible options:
+  # https://www.rabbitmq.com/uri-spec.html
+  url="{{ .ApplicationServer.Integration.KNoT.URL }}"
+
+  # Event routing key template.
+  #
+  # This is the event routing-key template used when publishing device
+  # events. Messages will be published to the "amq.topic" exchange.
+  event_routing_key_template="{{ .ApplicationServer.Integration.KNoT.EventRoutingKeyTemplate }}"
 
   # MQTT integration backend.
   [application_server.integration.mqtt]
