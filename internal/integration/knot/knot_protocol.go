@@ -31,7 +31,7 @@ func newProtocol(conf config.IntegrationKNoTConfig) (Protocol, error) {
 	p := &protocol{}
 
 	p.userToken = conf.UserToken
-
+	p.network = new(networkWrapper)
 	p.network.amqp = network.NewAMQP(conf.URL)
 	p.network.amqp.Start()
 
