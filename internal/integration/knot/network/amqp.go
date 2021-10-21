@@ -49,14 +49,14 @@ func NewAMQP(url string) *AMQP {
 }
 
 // Start starts the message handling
-func (a *AMQP) Start() {
+func (a *AMQP) Start() error {
 	err := backoff.Retry(a.connect, backoff.NewExponentialBackOff())
 	if err != nil {
-		// a.logger.Error(err)
-		return
+		return err
 	}
 
 	go a.notifyWhenClosed()
+	return nil
 }
 
 // Stop closes the connection started

@@ -24,17 +24,34 @@ func NewMsgSubscriber(amqp *AMQP) Subscriber {
 
 func (ms *msgSubscriber) SubscribeToKNoTMessages(msgChan chan InMsg) error {
 	var err error
-	subscribe := func(msgChan chan InMsg, queue, exchange, kind, key string) {
-		if err != nil {
-			return
-		}
+
+	subscribe := func(msgChan chan InMsg, queue, exchange, kind, key string) error {
 		err = ms.amqp.OnMessage(msgChan, queue, exchange, kind, key)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyRegistered)
-	subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUnregistered)
-	subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, replyToAuthMessages)
-	subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUpdatedConfig)
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyRegistered)
+	if err != nil {
+		return err
+	}
+
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUnregistered)
+	if err != nil {
+		return err
+	}
+
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, replyToAuthMessages)
+	if err != nil {
+		return err
+	}
+
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUpdatedConfig)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

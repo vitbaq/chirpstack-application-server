@@ -2,11 +2,14 @@ package knot
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	pb "github.com/brocaar/chirpstack-api/go/v3/as/integration"
 	"github.com/brocaar/chirpstack-application-server/internal/config"
+	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/marshaler"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/models"
 )
@@ -16,12 +19,14 @@ type Integration struct {
 	protocol Protocol
 }
 
+var msgChan = make(chan entities.Device)
+
 // New creates a new KNoT integration.
 func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, error) {
 	var err error
 	i := Integration{}
 
-	i.protocol, err = newProtocol(conf)
+	i.protocol, err = newProtocol(conf, msgChan)
 	if err != nil {
 		return nil, errors.Wrap(err, "new knot protocol")
 	}
@@ -29,13 +34,39 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 	return &i, nil
 }
 
+func formatDevice(DevEui []byte, deviceName string) entities.Device {
+	device := entities.Device{}
+	str := []byte("")
+	for _, v := range DevEui {
+		str = strconv.AppendInt(str, int64(v), 16)
+	}
+	device.ID = string(str)
+	device.Name = deviceName
+	device.State = entities.KnotNew
+	return device
+}
+
 // HandleUplinkEvent sends an UplinkEvent.
 func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.UplinkEvent) error {
+
+	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
+
+	log.WithFields(log.Fields{
+		"event": "uplink",
+	}).Info("New uplink")
+
 	return nil
 }
 
 // HandleJoinEvent sends a JoinEvent.
 func (i *Integration) HandleJoinEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.JoinEvent) error {
+
+	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
+
+	log.WithFields(log.Fields{
+		"event": "join",
+	}).Info("New join")
+
 	return nil
 }
 
