@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
 	"github.com/cenkalti/backoff/v4"
-
+	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
 
@@ -14,7 +15,7 @@ const (
 	exchangeTypeFanout = "fanout"
 
 	exchangeDevice      = "device"
-	replyToAuthMessages = "chirpstack-auth-rpc"
+	ReplyToAuthMessages = "chirpstack-auth-rpc"
 )
 
 // AMQP handles the connection, queues and exchanges declared
@@ -73,7 +74,7 @@ func (a *AMQP) Stop() {
 }
 
 // OnMessage receive messages and put them on channel
-func (a *AMQP) OnMessage(msgChan chan InMsg, queueName, exchangeName, exchangeType, key string) error {
+func (a *AMQP) OnMessage(device chan entities.Device, queueName, exchangeName, exchangeType, key string) error {
 	err := a.declareExchange(exchangeName, exchangeType)
 	if err != nil {
 		// a.logger.Error(err)
@@ -112,7 +113,7 @@ func (a *AMQP) OnMessage(msgChan chan InMsg, queueName, exchangeName, exchangeTy
 		return err
 	}
 
-	go convertDeliveryToInMsg(deliveries, msgChan)
+	go convertDeliveryToDeviceMsg(deliveries, device)
 
 	return nil
 }
@@ -225,8 +226,55 @@ func (a *AMQP) declareQueue(name string) error {
 	return err
 }
 
-func convertDeliveryToInMsg(deliveries <-chan amqp.Delivery, outMsg chan InMsg) {
+func convertDeliveryToDeviceMsg(deliveries <-chan amqp.Delivery, deviceChan chan entities.Device) {
+
 	for d := range deliveries {
-		outMsg <- InMsg{d.Exchange, d.RoutingKey, d.ReplyTo, d.CorrelationId, d.Headers, d.Body}
+
+		switch d.RoutingKey {
+
+		// registered msg from knot
+		case BindingKeyRegistered:
+
+			deviceInf := entities.Device{}
+
+			Receiver := DeviceRegisteredResponse{}
+
+			json.Unmarshal([]byte(string(d.Body)), &Receiver)
+			deviceInf.ID = Receiver.ID
+			deviceInf.Name = Receiver.Name
+
+			if Receiver.Error != nil {
+				//alread registered
+				deviceInf.State = entities.KnotRegisteredButNoToken
+				deviceChan <- deviceInf
+			} else {
+				deviceInf.Token = Receiver.Token
+				deviceInf.State = entities.KnotRegistered
+				deviceChan <- deviceInf
+			}
+			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a registration response")
+
+		// unregistered
+		case BindingKeyUnregistered:
+
+			deviceInf := entities.Device{}
+
+			Receiver := DeviceUnregisterRequest{}
+
+			json.Unmarshal([]byte(string(d.Body)), &Receiver)
+			deviceInf.ID = Receiver.ID
+			deviceInf.State = entities.KnotDelete
+			deviceChan <- deviceInf
+
+			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a unregistration response")
+
+		//receive a auth msg
+		case ReplyToAuthMessages:
+
+			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a authentication response")
+
+		}
+
+		//outMsg <- InMsg{d.Exchange, d.RoutingKey, d.ReplyTo, d.CorrelationId, d.Headers, d.Body}
 	}
 }

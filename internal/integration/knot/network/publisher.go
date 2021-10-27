@@ -76,7 +76,7 @@ func (mp *msgPublisher) PublishDeviceAuth(userToken string, device *entities.Dev
 		Authorization: userToken,
 		Expiration:    defaultExpirationTime,
 		CorrelationID: defaultCorrelationID,
-		ReplyTo:       replyToAuthMessages,
+		ReplyTo:       ReplyToAuthMessages,
 	}
 
 	message := DeviceAuthRequest{

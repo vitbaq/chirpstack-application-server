@@ -2,7 +2,11 @@ package entities
 
 //device state regarding the knot connection
 const (
-	KnotNew string = "new"
+	KnotNew                  string = "new"
+	KnotRegisteredButNoToken        = "registeredButNoToken"
+	KnotRegistered                  = "registered"
+	KnotDelete                      = "delete"
+	KnotForceDelete                 = "forceDelete"
 )
 
 // Device represents the device domain entity
@@ -12,7 +16,7 @@ type Device struct {
 	Token  string   `json:"token,omitempty"`
 	Name   string   `json:"name,omitempty"`
 	Config []Config `json:"config,omitempty"`
-	State  string   `json:",omitempty"`
+	State  string   `json:"state,omitempty"`
 
 	// LoRaWAN properties
 

@@ -36,13 +36,12 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 
 func formatDevice(DevEui []byte, deviceName string) entities.Device {
 	device := entities.Device{}
-	str := []byte("")
+	DevEUI_str := []byte("")
 	for _, v := range DevEui {
-		str = strconv.AppendInt(str, int64(v), 16)
+		DevEUI_str = strconv.AppendInt(DevEUI_str, int64(v), 16)
 	}
-	device.ID = string(str)
+	device.ID = string(DevEUI_str)
 	device.Name = deviceName
-	device.State = entities.KnotNew
 	return device
 }
 
@@ -51,9 +50,7 @@ func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integratio
 
 	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
 
-	log.WithFields(log.Fields{
-		"event": "uplink",
-	}).Info("New uplink")
+	log.WithFields(log.Fields{"event": "uplink"}).Info("New uplink")
 
 	return nil
 }
@@ -63,9 +60,7 @@ func (i *Integration) HandleJoinEvent(ctx context.Context, _ models.Integration,
 
 	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
 
-	log.WithFields(log.Fields{
-		"event": "join",
-	}).Info("New join")
+	log.WithFields(log.Fields{"event": "join"}).Info("New join")
 
 	return nil
 }

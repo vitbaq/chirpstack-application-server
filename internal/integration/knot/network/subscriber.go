@@ -1,16 +1,18 @@
 package network
 
+import "github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
+
 const (
 	queueName = "chirpstack-knot-messages"
 
-	bindingKeyRegistered    = "device.registered"
-	bindingKeyUnregistered  = "device.unregistered"
-	bindingKeyUpdatedConfig = "device.config.updated"
+	BindingKeyRegistered    = "device.registered"
+	BindingKeyUnregistered  = "device.unregistered"
+	BindingKeyUpdatedConfig = "device.config.updated"
 )
 
 // Subscriber provides methods to subscribe to events on message broker
 type Subscriber interface {
-	SubscribeToKNoTMessages(msgChan chan InMsg) error
+	SubscribeToKNoTMessages(deviceChan chan entities.Device) error
 }
 
 type msgSubscriber struct {
@@ -22,33 +24,33 @@ func NewMsgSubscriber(amqp *AMQP) Subscriber {
 	return &msgSubscriber{amqp}
 }
 
-func (ms *msgSubscriber) SubscribeToKNoTMessages(msgChan chan InMsg) error {
+func (ms *msgSubscriber) SubscribeToKNoTMessages(deviceChan chan entities.Device) error {
 	var err error
 
-	subscribe := func(msgChan chan InMsg, queue, exchange, kind, key string) error {
-		err = ms.amqp.OnMessage(msgChan, queue, exchange, kind, key)
+	subscribe := func(deviceChan chan entities.Device, queue, exchange, kind, key string) error {
+		err = ms.amqp.OnMessage(deviceChan, queue, exchange, kind, key)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
 
-	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyRegistered)
+	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyRegistered)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUnregistered)
+	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUnregistered)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, replyToAuthMessages)
+	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, ReplyToAuthMessages)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, bindingKeyUpdatedConfig)
+	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUpdatedConfig)
 	if err != nil {
 		return err
 	}
