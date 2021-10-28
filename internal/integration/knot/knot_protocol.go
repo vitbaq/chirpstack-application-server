@@ -128,40 +128,47 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 		// if the device status is new, request a device registration
 		case entities.KnotNew:
 
-			log.WithFields(log.Fields{"amqp": "knot"}).Info("send a register request")
+			log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
 			p.network.publisher.PublishDeviceRegister(p.userToken, &device)
-
-		// if the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
-		case entities.KnotRegisteredButNoToken:
-
-			log.WithFields(log.Fields{"amqp": "knot"}).Info("device is registered, but does not have a token; send a unrequest request")
-			p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
 
 		// if the device is already registered, ask for device authentication
 		case entities.KnotRegistered:
 
-			log.WithFields(log.Fields{"amqp": "knot"}).Info("send a auth request")
+			log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
 			p.network.publisher.PublishDeviceAuth(p.userToken, &device)
 
 		// check if the device has a token, if it does, delete it, if not, resend the registration request
 		case entities.KnotDelete:
 
 			if device.Token != "" {
-				log.WithFields(log.Fields{"amqp": "knot"}).Info("delete a device")
+				log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
 				p.DeleteDevice(device.ID)
 			} else {
 				device.State = entities.KnotNew
 				p.UpdateDevice(device)
-				log.WithFields(log.Fields{"amqp": "knot"}).Info("send a register request")
+				log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("send a register request")
 				p.network.publisher.PublishDeviceRegister(p.userToken, &device)
 			}
 
 		// just delete
 		case entities.KnotForceDelete:
 
-			log.WithFields(log.Fields{"amqp": "knot"}).Info("delete a device")
+			log.WithFields(log.Fields{"knot": entities.KnotForceDelete}).Info("delete a device")
 			p.DeleteDevice(device.ID)
 
+		// handle errors
+		case entities.KnotError:
+			switch *device.Error {
+
+			//if the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
+			case "thing is already registered":
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Info("device is registered, but does not have a token; send a unrequest request")
+				p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
+
+			default:
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Info("ERROR WITHOUT HANDLER", *device.Error)
+
+			}
 		}
 	}
 }
