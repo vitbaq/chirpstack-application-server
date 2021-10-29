@@ -9,6 +9,7 @@ const (
 	KnotDelete               = "delete"
 	KnotForceDelete          = "forceDelete"
 	KnotoK                   = "readToSendData"
+	KnotAuth                 = "authenticated"
 	KnotError                = "error"
 )
 

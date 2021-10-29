@@ -142,6 +142,12 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 			log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
 			p.network.publisher.PublishDeviceAuth(p.userToken, &device)
 
+		// now the device has a token, make a new request for authentication.
+		case entities.KnotAuth:
+
+			log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
+			//p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
+
 		// check if the device has a token, if it does, delete it, if not, resend the registration request
 		case entities.KnotDelete:
 
@@ -164,7 +170,6 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 		// handle errors
 		case entities.KnotError:
 			switch device.Error {
-
 			//if the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
 			case "thing is already registered":
 				log.WithFields(log.Fields{"knot": entities.KnotError}).Info("device is registered, but does not have a token; send a unrequest request")
