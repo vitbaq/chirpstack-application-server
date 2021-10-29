@@ -2,6 +2,8 @@ package knot
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -34,9 +36,23 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 	return &i, nil
 }
 
-func formatDevice(DevEui []byte, deviceName string) entities.Device {
+func formatDevice(DevEui []byte, deviceName string, config map[string]string) entities.Device {
 	device := entities.Device{}
 	DevEUI_str := []byte("")
+	configFrame := entities.Config{}
+	var str string
+	//get all settings from all sensors
+	for i := 1; i < 100; i++ {
+		str = fmt.Sprintf("sensor%d", i)
+		if confData, ok := config[str]; ok {
+			json.Unmarshal([]byte(string(confData)), &configFrame)
+			device.Config = append(device.Config, configFrame)
+		} else {
+			break
+		}
+	}
+	fmt.Println(device.Config)
+
 	for _, v := range DevEui {
 		DevEUI_str = strconv.AppendInt(DevEUI_str, int64(v), 16)
 	}
@@ -48,7 +64,7 @@ func formatDevice(DevEui []byte, deviceName string) entities.Device {
 // HandleUplinkEvent sends an UplinkEvent.
 func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.UplinkEvent) error {
 
-	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
+	msgChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
 
 	log.WithFields(log.Fields{"event": "uplink"}).Info("New uplink")
 
@@ -58,7 +74,7 @@ func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integratio
 // HandleJoinEvent sends a JoinEvent.
 func (i *Integration) HandleJoinEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.JoinEvent) error {
 
-	msgChan <- formatDevice(pl.DevEui, pl.DeviceName)
+	msgChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
 
 	log.WithFields(log.Fields{"event": "join"}).Info("New join")
 

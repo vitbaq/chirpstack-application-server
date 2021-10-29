@@ -146,7 +146,7 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 		case entities.KnotAuth:
 
 			log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
-			//p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
+			p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
 
 		// check if the device has a token, if it does, delete it, if not, resend the registration request
 		case entities.KnotDelete:

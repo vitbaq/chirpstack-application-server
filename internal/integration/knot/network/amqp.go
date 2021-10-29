@@ -289,6 +289,25 @@ func convertDeliveryToDeviceMsg(deliveries <-chan amqp.Delivery, deviceChan chan
 				deviceChan <- deviceInf
 				log.WithFields(log.Fields{"amqp": "knot"}).Info("received a authentication response")
 			}
+		case BindingKeyUpdatedConfig:
+			deviceInf := entities.Device{}
+
+			Receiver := ConfigUpdatedResponse{}
+
+			json.Unmarshal([]byte(string(d.Body)), &Receiver)
+			deviceInf.ID = Receiver.ID
+
+			if Receiver.Error != "" {
+				//alread registered
+				deviceInf.Error = Receiver.Error
+				deviceInf.State = entities.KnotError
+				deviceChan <- deviceInf
+				log.WithFields(log.Fields{"amqp": "knot"}).Info("received a error on config update response")
+			} else {
+				deviceInf.State = entities.KnotoK
+				deviceChan <- deviceInf
+				log.WithFields(log.Fields{"amqp": "knot"}).Info("received a config update response")
+			}
 		}
 
 		//outMsg <- InMsg{d.Exchange, d.RoutingKey, d.ReplyTo, d.CorrelationId, d.Headers, d.Body}
