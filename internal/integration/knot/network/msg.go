@@ -12,10 +12,10 @@ type DeviceRegisterRequest struct {
 
 // DeviceRegisteredResponse represents the incoming register device response message
 type DeviceRegisteredResponse struct {
-	ID    string  `json:"id"`
-	Name  string  `json:"name"`
-	Token string  `json:"token"`
-	Error *string `json:"error"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Token string `json:"token"`
+	Error string `json:"error"`
 }
 
 // DeviceUnregisterRequest represents the outgoing unregister device request message
@@ -25,8 +25,8 @@ type DeviceUnregisterRequest struct {
 
 // DeviceUnregisteredResponse represents the incoming unregister device response message
 type DeviceUnregisteredResponse struct {
-	ID    string  `json:"id"`
-	Error *string `json:"error"`
+	ID    string `json:"id"`
+	Error string `json:"error"`
 }
 
 // ConfigUpdateRequest represents the outgoing update config request message
@@ -40,7 +40,7 @@ type ConfigUpdatedResponse struct {
 	ID      string            `json:"id"`
 	Config  []entities.Config `json:"config,omitempty"`
 	Changed bool              `json:"changed"`
-	Error   *string           `json:"error"`
+	Error   string            `json:"error"`
 }
 
 // DeviceAuthRequest represents the outgoing auth device command request
@@ -51,8 +51,8 @@ type DeviceAuthRequest struct {
 
 // DeviceAuthResponse represents the incoming auth device command response
 type DeviceAuthResponse struct {
-	ID    string  `json:"id"`
-	Error *string `json:"error"`
+	ID    string `json:"id"`
+	Error string `json:"error"`
 }
 
 // DataSent represents the data sent to the KNoT Cloud

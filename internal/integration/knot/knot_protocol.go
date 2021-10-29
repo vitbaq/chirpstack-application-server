@@ -77,6 +77,9 @@ func (p *protocol) UpdateDevice(device entities.Device) error {
 	if device.State != "" {
 		receiver.State = device.State
 	}
+	if device.Error != "" {
+		receiver.Error = device.Error
+	}
 	p.devices[device.ID] = receiver
 	return nil
 }
@@ -128,6 +131,8 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 		// if the device status is new, request a device registration
 		case entities.KnotNew:
 
+			device.State = entities.KnotRegisterReq
+			p.UpdateDevice(device)
 			log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
 			p.network.publisher.PublishDeviceRegister(p.userToken, &device)
 
@@ -144,7 +149,7 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 				log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
 				p.DeleteDevice(device.ID)
 			} else {
-				device.State = entities.KnotNew
+				device.State = entities.KnotRegisterReq
 				p.UpdateDevice(device)
 				log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("send a register request")
 				p.network.publisher.PublishDeviceRegister(p.userToken, &device)
@@ -158,7 +163,7 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 
 		// handle errors
 		case entities.KnotError:
-			switch *device.Error {
+			switch device.Error {
 
 			//if the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
 			case "thing is already registered":
@@ -166,7 +171,7 @@ func ControlData(msgChan chan entities.Device, p *protocol) {
 				p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
 
 			default:
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Info("ERROR WITHOUT HANDLER", *device.Error)
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Info("ERROR WITHOUT HANDLER" + device.Error)
 
 			}
 		}

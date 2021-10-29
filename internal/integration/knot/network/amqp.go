@@ -243,7 +243,7 @@ func convertDeliveryToDeviceMsg(deliveries <-chan amqp.Delivery, deviceChan chan
 			deviceInf.ID = Receiver.ID
 			deviceInf.Name = Receiver.Name
 
-			if Receiver.Error != nil {
+			if Receiver.Error != "" {
 				//alread registered
 				deviceInf.Error = Receiver.Error
 				deviceInf.State = entities.KnotError
