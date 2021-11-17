@@ -1,7 +1,5 @@
 package network
 
-import "github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
-
 const (
 	queueName = "chirpstack-knot-messages"
 
@@ -12,7 +10,7 @@ const (
 
 // Subscriber provides methods to subscribe to events on message broker
 type Subscriber interface {
-	SubscribeToKNoTMessages(deviceChan chan entities.Device) error
+	SubscribeToKNoTMessages(msgChan chan InMsg) error
 }
 
 type msgSubscriber struct {
@@ -24,33 +22,33 @@ func NewMsgSubscriber(amqp *AMQP) Subscriber {
 	return &msgSubscriber{amqp}
 }
 
-func (ms *msgSubscriber) SubscribeToKNoTMessages(deviceChan chan entities.Device) error {
+func (ms *msgSubscriber) SubscribeToKNoTMessages(msgChan chan InMsg) error {
 	var err error
 
-	subscribe := func(deviceChan chan entities.Device, queue, exchange, kind, key string) error {
-		err = ms.amqp.OnMessage(deviceChan, queue, exchange, kind, key)
+	subscribe := func(msgChan chan InMsg, queue, exchange, kind, key string) error {
+		err = ms.amqp.OnMessage(msgChan, queue, exchange, kind, key)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
 
-	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyRegistered)
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyRegistered)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUnregistered)
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUnregistered)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, ReplyToAuthMessages)
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, ReplyToAuthMessages)
 	if err != nil {
 		return err
 	}
 
-	err = subscribe(deviceChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUpdatedConfig)
+	err = subscribe(msgChan, queueName, exchangeDevice, exchangeTypeDirect, BindingKeyUpdatedConfig)
 	if err != nil {
 		return err
 	}

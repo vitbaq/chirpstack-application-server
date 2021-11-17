@@ -12,6 +12,7 @@ import (
 	pb "github.com/brocaar/chirpstack-api/go/v3/as/integration"
 	"github.com/brocaar/chirpstack-application-server/internal/config"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
+	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/network"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/marshaler"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/models"
 )
@@ -21,14 +22,15 @@ type Integration struct {
 	protocol Protocol
 }
 
-var msgChan = make(chan entities.Device)
+var deviceChan = make(chan entities.Device)
+var msgChan = make(chan network.InMsg)
 
 // New creates a new KNoT integration.
 func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, error) {
 	var err error
 	i := Integration{}
 
-	i.protocol, err = newProtocol(conf, msgChan)
+	i.protocol, err = newProtocol(conf, deviceChan, msgChan)
 	if err != nil {
 		return nil, errors.Wrap(err, "new knot protocol")
 	}
@@ -36,6 +38,7 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 	return &i, nil
 }
 
+// Formatting all the information needed to configure a knot device
 func formatDevice(DevEui []byte, deviceName string, config map[string]string) entities.Device {
 	device := entities.Device{}
 	DevEUI_str := []byte("")
@@ -64,7 +67,7 @@ func formatDevice(DevEui []byte, deviceName string, config map[string]string) en
 // HandleUplinkEvent sends an UplinkEvent.
 func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.UplinkEvent) error {
 
-	msgChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
+	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
 
 	log.WithFields(log.Fields{"event": "uplink"}).Info("New uplink")
 
@@ -74,7 +77,7 @@ func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integratio
 // HandleJoinEvent sends a JoinEvent.
 func (i *Integration) HandleJoinEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.JoinEvent) error {
 
-	msgChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
+	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags)
 
 	log.WithFields(log.Fields{"event": "join"}).Info("New join")
 
