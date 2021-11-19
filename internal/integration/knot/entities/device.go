@@ -21,6 +21,7 @@ type Device struct {
 	Name   string   `json:"name,omitempty"`
 	Config []Config `json:"config,omitempty"`
 	State  string   `json:"state,omitempty"`
+	Data   []Data   `json:"data,omitempty"`
 	Error  string
 
 	// LoRaWAN properties
