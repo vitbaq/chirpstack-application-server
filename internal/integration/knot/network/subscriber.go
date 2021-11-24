@@ -3,6 +3,7 @@ package network
 const (
 	queueName = "chirpstack-knot-messages"
 
+	// Binding Keys used to receive knot cloud data
 	BindingKeyRegistered    = "device.registered"
 	BindingKeyUnregistered  = "device.unregistered"
 	BindingKeyUpdatedConfig = "device.config.updated"
@@ -22,6 +23,7 @@ func NewMsgSubscriber(amqp *AMQP) Subscriber {
 	return &msgSubscriber{amqp}
 }
 
+// SubscribeToKNoTMessages register AMQP to receive data from Knot Cloud
 func (ms *msgSubscriber) SubscribeToKNoTMessages(msgChan chan InMsg) error {
 	var err error
 

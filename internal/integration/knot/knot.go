@@ -28,27 +28,27 @@ var msgChan = make(chan network.InMsg)
 // New creates a new KNoT integration.
 func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, error) {
 	var err error
-	i := Integration{}
+	integration := Integration{}
 
-	i.protocol, err = newProtocol(conf, deviceChan, msgChan)
+	integration.protocol, err = newProtocol(conf, deviceChan, msgChan)
 	if err != nil {
 		return nil, errors.Wrap(err, "new knot protocol")
 	}
 
-	return &i, nil
+	return &integration, nil
 }
 
 // Formatting all the information needed to configure a knot device
 func formatDevice(DevEui []byte, deviceName string, config map[string]string, ObjectJson string) entities.Device {
+
 	device := entities.Device{}
 	DevEUI_str := []byte("")
 	configFrame := entities.Config{}
-	var str string
-
-	//get all settings from all sensors
-	for i := 1; i < 100; i++ {
-		str = fmt.Sprintf("sensor%d", i)
-		if confData, ok := config[str]; ok {
+	maxSensorConf := 100
+	// get all settings from all sensors
+	for i := 1; i < maxSensorConf; i++ {
+		sensorConfID := fmt.Sprintf("sensor%d", i)
+		if confData, ok := config[sensorConfID]; ok {
 			json.Unmarshal([]byte(string(confData)), &configFrame)
 			device.Config = append(device.Config, configFrame)
 		} else {
@@ -59,6 +59,7 @@ func formatDevice(DevEui []byte, deviceName string, config map[string]string, Ob
 	for _, v := range DevEui {
 		DevEUI_str = strconv.AppendInt(DevEUI_str, int64(v), 16)
 	}
+
 	device.ID = string(DevEUI_str)
 	device.Name = deviceName
 

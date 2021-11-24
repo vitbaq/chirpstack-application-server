@@ -67,21 +67,17 @@ func (a *AMQP) Stop() {
 	if a.channel != nil {
 		defer a.channel.Close()
 	}
-
-	// a.logger.Debug("AMQP handler stopped")
 }
 
 // OnMessage receive messages and put them on channel
 func (a *AMQP) OnMessage(msgChan chan InMsg, queueName, exchangeName, exchangeType, key string) error {
 	err := a.declareExchange(exchangeName, exchangeType)
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
 	err = a.declareQueue(queueName)
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
@@ -93,7 +89,6 @@ func (a *AMQP) OnMessage(msgChan chan InMsg, queueName, exchangeName, exchangeTy
 		nil,   // arguments
 	)
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
@@ -107,7 +102,6 @@ func (a *AMQP) OnMessage(msgChan chan InMsg, queueName, exchangeName, exchangeTy
 		nil,   // arguments
 	)
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
@@ -166,11 +160,9 @@ func (a *AMQP) PublishPersistentMessage(exchange, exchangeType, key string, data
 
 func (a *AMQP) notifyWhenClosed() {
 	errReason := <-a.conn.NotifyClose(make(chan *amqp.Error))
-	// a.logger.Infof("AMQP connection closed: %s", errReason)
 	if errReason != nil {
 		err := backoff.Retry(a.connect, backoff.NewExponentialBackOff())
 		if err != nil {
-			// a.logger.Error(err)
 			return
 		}
 
@@ -181,18 +173,15 @@ func (a *AMQP) notifyWhenClosed() {
 func (a *AMQP) connect() error {
 	conn, err := amqp.Dial(a.url)
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
 	a.conn = conn
 	channel, err := a.conn.Channel()
 	if err != nil {
-		// a.logger.Error(err)
 		return err
 	}
 
-	// a.logger.Debug("AMQP handler connected")
 	a.channel = channel
 
 	return nil

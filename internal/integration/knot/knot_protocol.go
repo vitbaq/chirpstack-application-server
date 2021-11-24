@@ -17,6 +17,7 @@ type Protocol interface {
 	deleteDevice(id string) error
 	updateDevice(device entities.Device) error
 	checkData(device entities.Device) error
+	checkDeviceConfiguration(device entities.Device) error
 }
 
 type networkWrapper struct {
@@ -68,9 +69,9 @@ func (p *protocol) checkData(device entities.Device) error {
 	var ok bool
 	id_pass := 0
 	// Check if the ids are correct, no repetition
-	for _, v := range device.Data {
-		if v.SensorID != id_pass {
-			id_pass = v.SensorID
+	for _, data := range device.Data {
+		if data.SensorID != id_pass {
+			id_pass = data.SensorID
 			ok = true
 		} else {
 			ok = false
@@ -82,23 +83,42 @@ func (p *protocol) checkData(device entities.Device) error {
 	return fmt.Errorf("Invalid Data")
 }
 
+// Check for device configuration
+func (p *protocol) checkDeviceConfiguration(device entities.Device) error {
+	var ok bool
+	id_pass := 0
+	// Check if the ids are correct, no repetition
+	for _, data := range device.Config {
+		if data.SensorID != id_pass {
+			id_pass = data.SensorID
+			ok = true
+		} else {
+			ok = false
+		}
+	}
+	if ok {
+		return nil
+	}
+	return fmt.Errorf("Invalid Config")
+}
+
 // Update the knot device information on map
 func (p *protocol) updateDevice(device entities.Device) error {
 
-	if _, d := p.devices[device.ID]; !d {
-		//se não existir, retorna false
-		log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Info("Device do not exist")
+	if _, checkDevice := p.devices[device.ID]; !checkDevice {
+
+		log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("Device do not exist")
 		return fmt.Errorf("Device do not exist")
 	}
 
 	receiver := p.devices[device.ID]
 
-	receiver.Config = device.Config
-
+	if p.checkDeviceConfiguration(device) == nil {
+		receiver.Config = device.Config
+	}
 	if p.checkData(device) == nil {
 		receiver.Data = device.Data
 	}
-
 	if device.Name != "" {
 		receiver.Name = device.Name
 	}
@@ -124,10 +144,9 @@ func (p *protocol) Close() error {
 // Create a new knot device
 func (p *protocol) createDevice(device entities.Device) error {
 
-	if _, d := p.devices[device.ID]; d {
+	if _, checkDevice := p.devices[device.ID]; checkDevice {
 
 		p.updateDevice(device)
-		//log.WithFields(log.Fields{"dev_eui": device.ID}).Info("Device already exist")
 
 		return fmt.Errorf("Device already exist")
 	}
@@ -159,6 +178,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 		// Creates a new device if it doesn't exist
 		p.createDevice(device)
 		device = p.devices[device.ID]
+
 		switch device.State {
 
 		// If the device status is new, request a device registration
@@ -182,7 +202,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 			p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
 
 		// Send the new data that comes from the device to Knot Cloud
-		case entities.KnotoK:
+		case entities.KnotOk:
 
 			if p.checkData(device) != nil {
 				log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("invalid data")
@@ -222,6 +242,9 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unrequest request")
 				p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
 
+			case "thing's config not provided":
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unrequest request")
+
 			default:
 				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("ERROR WITHOUT HANDLER" + device.Error)
 
@@ -230,7 +253,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 	}
 }
 
-// Just formart ther Error msg
+// Just formart the Error message
 func errorFormat(device entities.Device, strError string) entities.Device {
 	device.Error = strError
 	device.State = entities.KnotError
@@ -241,74 +264,74 @@ func errorFormat(device entities.Device, strError string) entities.Device {
 // Handles messages coming from AMQP
 func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Device) {
 
-	for d := range msgChan {
+	for message := range msgChan {
 
-		switch d.RoutingKey {
+		switch message.RoutingKey {
 
 		// Registered msg from knot
 		case network.BindingKeyRegistered:
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a registration response")
-			deviceInf := entities.Device{}
+			device := entities.Device{}
 
 			receiver := network.DeviceRegisteredResponse{}
 
-			json.Unmarshal([]byte(string(d.Body)), &receiver)
-			deviceInf.ID = receiver.ID
-			deviceInf.Name = receiver.Name
+			json.Unmarshal([]byte(string(message.Body)), &receiver)
+			device.ID = receiver.ID
+			device.Name = receiver.Name
 
 			if receiver.Error != "" {
 				// Alread registered
-				deviceChan <- errorFormat(deviceInf, receiver.Error)
+				deviceChan <- errorFormat(device, receiver.Error)
 			} else {
-				deviceInf.Token = receiver.Token
-				deviceInf.State = entities.KnotRegistered
-				deviceChan <- deviceInf
+				device.Token = receiver.Token
+				device.State = entities.KnotRegistered
+				deviceChan <- device
 			}
 
 		// Unregistered
 		case network.BindingKeyUnregistered:
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a unregistration response")
-			deviceInf := entities.Device{}
+			device := entities.Device{}
 
 			receiver := network.DeviceUnregisterRequest{}
 
-			json.Unmarshal([]byte(string(d.Body)), &receiver)
-			deviceInf.ID = receiver.ID
-			deviceInf.State = entities.KnotDelete
-			deviceChan <- deviceInf
+			json.Unmarshal([]byte(string(message.Body)), &receiver)
+			device.ID = receiver.ID
+			device.State = entities.KnotDelete
+			deviceChan <- device
 
 		// Receive a auth msg
 		case network.ReplyToAuthMessages:
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a authentication response")
-			deviceInf := entities.Device{}
+			device := entities.Device{}
 
 			receiver := network.DeviceAuthResponse{}
 
-			json.Unmarshal([]byte(string(d.Body)), &receiver)
-			deviceInf.ID = receiver.ID
+			json.Unmarshal([]byte(string(message.Body)), &receiver)
+			device.ID = receiver.ID
 
 			if receiver.Error != "" {
 				// Alread registered
-				deviceChan <- errorFormat(deviceInf, receiver.Error)
+				deviceChan <- errorFormat(device, receiver.Error)
 			} else {
-				deviceInf.State = entities.KnotAuth
-				deviceChan <- deviceInf
+				device.State = entities.KnotAuth
+				deviceChan <- device
 
 			}
 		case network.BindingKeyUpdatedConfig:
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a config update response")
-			deviceInf := entities.Device{}
+			device := entities.Device{}
 
 			receiver := network.ConfigUpdatedResponse{}
 
-			json.Unmarshal([]byte(string(d.Body)), &receiver)
-			deviceInf.ID = receiver.ID
+			json.Unmarshal([]byte(string(message.Body)), &receiver)
+			device.ID = receiver.ID
 			if receiver.Error != "" {
 				// Alread registered
-				deviceChan <- errorFormat(deviceInf, receiver.Error)
+				deviceChan <- errorFormat(device, receiver.Error)
 			} else {
-				deviceInf.State = entities.KnotoK
-				deviceChan <- deviceInf
+				device.State = entities.KnotOk
+				deviceChan <- device
 			}
 		}
 	}

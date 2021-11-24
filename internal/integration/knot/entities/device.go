@@ -1,6 +1,6 @@
 package entities
 
-//device state regarding the knot connection
+// States that represent the current status of the device on the Knot network
 const (
 	KnotNew           string = "new"
 	KnotRegisterReq          = "registerRequest"
@@ -8,7 +8,7 @@ const (
 	KnotRegistered           = "registered"
 	KnotDelete               = "delete"
 	KnotForceDelete          = "forceDelete"
-	KnotoK                   = "readToSendData"
+	KnotOk                   = "readToSendData"
 	KnotAuth                 = "authenticated"
 	KnotError                = "error"
 )
