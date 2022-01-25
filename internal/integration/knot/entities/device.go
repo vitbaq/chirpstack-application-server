@@ -2,15 +2,14 @@ package entities
 
 // States that represent the current status of the device on the Knot network
 const (
-	KnotNew           string = "new"
-	KnotRegisterReq          = "registerRequest"
-	KnotUnregisterReq        = "registerUnrequest"
-	KnotRegistered           = "registered"
-	KnotDelete               = "delete"
-	KnotForceDelete          = "forceDelete"
-	KnotOk                   = "readToSendData"
-	KnotAuth                 = "authenticated"
-	KnotError                = "error"
+	KnotNew         string = "new"
+	KnotRegistered         = "registered"
+	KnotDelete             = "delete"
+	KnotForceDelete        = "forceDelete"
+	KnotOk                 = "readToSendData"
+	KnotAuth               = "authenticated"
+	KnotError              = "error"
+	KnotWait               = "waitResponse"
 )
 
 // Device represents the device domain entity
