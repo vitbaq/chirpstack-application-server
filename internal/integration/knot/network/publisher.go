@@ -122,7 +122,7 @@ func (mp *msgPublisher) PublishDeviceData(userToken string, device *entities.Dev
 		Data: data,
 	}
 
-	err := mp.amqp.PublishPersistentMessage(exchangeDevice, exchangeTypeFanout, routingKeyDataSent, message, &options)
+	err := mp.amqp.PublishPersistentMessage("data.published", exchangeTypeFanout, "", message, &options)
 	if err != nil {
 		return err
 	}
