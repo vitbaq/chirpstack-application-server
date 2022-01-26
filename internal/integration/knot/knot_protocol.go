@@ -18,6 +18,7 @@ type Protocol interface {
 	updateDevice(device entities.Device) error
 	checkData(device entities.Device) error
 	checkDeviceConfiguration(device entities.Device) error
+	deviceExists(device entities.Device) bool
 }
 
 type networkWrapper struct {
@@ -144,25 +145,27 @@ func (p *protocol) Close() error {
 // Create a new knot device
 func (p *protocol) createDevice(device entities.Device) error {
 
+	if device.State != "" {
+		return fmt.Errorf("device cannot be created, unknown source")
+	} else {
+		log.WithFields(log.Fields{"dev_eui": device.ID}).Info("Device created")
+
+		device.State = entities.KnotNew
+
+		p.devices[device.ID] = device
+
+		return nil
+	}
+}
+
+// Check if the device exists
+func (p *protocol) deviceExists(device entities.Device) bool {
+
 	if _, checkDevice := p.devices[device.ID]; checkDevice {
 
-		err := p.updateDevice(device)
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("Device already exist")
+		return true
 	}
-
-	log.WithFields(log.Fields{"dev_eui": device.ID}).Info("Device created")
-
-	device.State = entities.KnotNew
-
-	p.devices[device.ID] = device
-	err := p.updateDevice(device)
-	if err != nil {
-		return err
-	}
-	return nil
+	return false
 }
 
 // Delete the knot device from map
@@ -180,88 +183,29 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 	for device := range deviceChan {
 
 		// Creates a new device if it doesn't exist
-		err := p.createDevice(device)
-		if err != nil {
-			log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+		if p.deviceExists(device) {
+			err := p.updateDevice(device)
+			if err != nil {
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+			}
+		} else {
+			err := p.createDevice(device)
+			if err != nil {
+				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+			} else {
+				log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("Device created")
+			}
 		}
-		device = p.devices[device.ID]
 
-		switch device.State {
+		if p.deviceExists(device) {
 
-		// If the device status is new, request a device registration
-		case entities.KnotNew:
+			device = p.devices[device.ID]
 
-			device.State = entities.KnotWait
-			err = p.updateDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			} else {
-				err = p.network.publisher.PublishDeviceRegister(p.userToken, &device)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
-				}
-			}
-		// If the device is already registered, ask for device authentication
-		case entities.KnotRegistered:
-			device.State = entities.KnotWait
-			err = p.updateDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			} else {
-				err = p.network.publisher.PublishDeviceAuth(p.userToken, &device)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
-				}
-			}
-		// Now the device has a token, make a new request for authentication.
-		case entities.KnotAuth:
-			device.State = entities.KnotWait
-			err = p.updateDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			} else {
-				err = p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
-				}
-			}
-		// Send the new data that comes from the device to Knot Cloud
-		case entities.KnotOk:
-			err = p.checkData(device)
-			if err != nil {
-				log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("invalid data")
-			} else {
-				err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					device.Data = nil
-					err = p.updateDevice(device)
-					if err != nil {
-						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
-					}
-				}
-			}
+			switch device.State {
 
-		// Check if the device has a token, if it does, delete it, if not, resend the registration request
-		case entities.KnotDelete:
+			// If the device status is new, request a device registration
+			case entities.KnotNew:
 
-			if device.Token != "" {
-				err = p.deleteDevice(device.ID)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
-				}
-			} else {
 				device.State = entities.KnotWait
 				err := p.updateDevice(device)
 				if err != nil {
@@ -271,44 +215,116 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 					if err != nil {
 						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("send a register request")
+						log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
 					}
 				}
+			// If the device is already registered, ask for device authentication
+			case entities.KnotRegistered:
+				device.State = entities.KnotWait
+				err := p.updateDevice(device)
+				if err != nil {
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+				} else {
+					err = p.network.publisher.PublishDeviceAuth(p.userToken, &device)
+					if err != nil {
+						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+					} else {
+						log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
+					}
+				}
+			// Now the device has a token, make a new request for authentication.
+			case entities.KnotAuth:
+				device.State = entities.KnotWait
+				err := p.updateDevice(device)
+				if err != nil {
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+				} else {
+					err = p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
+					if err != nil {
+						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+					} else {
+						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
+					}
+				}
+			// Send the new data that comes from the device to Knot Cloud
+			case entities.KnotOk:
+				err := p.checkData(device)
+				if err != nil {
+					log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("invalid data")
+				} else {
+					err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
+					if err != nil {
+						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+					} else {
+						device.Data = nil
+						err = p.updateDevice(device)
+						if err != nil {
+							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+						} else {
+							log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
+						}
+					}
+				}
+
+			// Check if the device has a token, if it does, delete it, if not, resend the registration request
+			case entities.KnotDelete:
+
+				if device.Token != "" {
+					err := p.deleteDevice(device.ID)
+					if err != nil {
+						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+					} else {
+						log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
+					}
+				} else {
+					device.State = entities.KnotWait
+					err := p.updateDevice(device)
+					if err != nil {
+						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+					} else {
+						err = p.network.publisher.PublishDeviceRegister(p.userToken, &device)
+						if err != nil {
+							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+						} else {
+							log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("send a register request")
+						}
+					}
+				}
+
+			// Just delete
+			case entities.KnotForceDelete:
+
+				err := p.deleteDevice(device.ID)
+				if err != nil {
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+				} else {
+					log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
+				}
+
+			// Handle errors
+			case entities.KnotError:
+				switch device.Error {
+				// If the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
+				case "thing is already registered":
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
+					p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
+
+				case "thing's config not provided":
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
+
+				default:
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("ERROR WITHOUT HANDLER" + device.Error)
+
+				}
+				device.State = entities.KnotWait
+				device.Error = ""
+				err := p.updateDevice(device)
+				if err != nil {
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+				}
+			case entities.KnotWait:
+
 			}
-
-		// Just delete
-		case entities.KnotForceDelete:
-
-			err = p.deleteDevice(device.ID)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			} else {
-				log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
-			}
-
-		// Handle errors
-		case entities.KnotError:
-			switch device.Error {
-			// If the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
-			case "thing is already registered":
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
-				p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
-
-			case "thing's config not provided":
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
-
-			default:
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error("ERROR WITHOUT HANDLER" + device.Error)
-
-			}
-			device.State = entities.KnotWait
-			device.Error = ""
-			err := p.updateDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			}
-		case entities.KnotWait:
-
 		}
 	}
 }
