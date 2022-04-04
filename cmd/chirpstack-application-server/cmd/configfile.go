@@ -258,6 +258,13 @@ id="{{ .ApplicationServer.ID }}"
   # https://www.rabbitmq.com/uri-spec.html
   url="{{ .ApplicationServer.Integration.KNoT.URL }}"
 
+
+  # Knot device configuration
+  # This is the configuration used to register the device on the knot platform,
+  # identifying the sensor's type data and other metadata
+
+  device = [{{.ApplicationServer.Integration.KNoT.Devices}}]
+
   # Event routing key template.
   #
   # This is the event routing-key template used when publishing device

@@ -57,12 +57,20 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 		return p, err
 	}
 
-	p.devices = make(map[string]entities.Device)
+	p.mapDevices(conf.Devices)
 
 	go handlerKnotAMQP(msgChan, deviceChan)
 	go dataControl(deviceChan, p)
 
 	return p, nil
+}
+
+//Map the knot devices from the config file array
+func (p *protocol) mapDevices(devices []entities.Device) {
+	p.devices = make(map[string]entities.Device)
+	for _, device := range devices {
+		p.devices[device.ID] = device
+	}
 }
 
 // Check for data to be updated

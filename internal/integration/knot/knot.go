@@ -3,7 +3,6 @@ package knot
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -43,18 +42,6 @@ func formatDevice(DevEui []byte, deviceName string, config map[string]string, Ob
 
 	device := entities.Device{}
 	DevEUI_str := []byte("")
-	configFrame := entities.Config{}
-	maxSensorConf := 100
-	// get all settings from all sensors
-	for i := 1; i < maxSensorConf; i++ {
-		sensorConfID := fmt.Sprintf("sensor%d", i)
-		if confData, ok := config[sensorConfID]; ok {
-			json.Unmarshal([]byte(string(confData)), &configFrame)
-			device.Config = append(device.Config, configFrame)
-		} else {
-			break
-		}
-	}
 
 	for _, v := range DevEui {
 		DevEUI_str = strconv.AppendInt(DevEUI_str, int64(v), 16)

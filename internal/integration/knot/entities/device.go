@@ -15,10 +15,10 @@ const (
 // Device represents the device domain entity
 type Device struct {
 	// KNoT Protocol properties
-	ID     string   `json:"id"`
-	Token  string   `json:"token,omitempty"`
-	Name   string   `json:"name,omitempty"`
-	Config []Config `json:"config,omitempty"`
+	ID     string   `mapstructure: "id" json:"id,omitempty"`
+	Token  string   `mapstructure: "token" json:"token,omitempty"`
+	Name   string   `mapstructure: "name" json:"name,omitempty"`
+	Config []Config `mapstructure: "config" json:"config,omitempty"`
 	State  string   `json:"state,omitempty"`
 	Data   []Data   `json:"data,omitempty"`
 	Error  string

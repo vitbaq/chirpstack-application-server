@@ -2,6 +2,8 @@ package config
 
 import (
 	"time"
+
+	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
 )
 
 // Config defines the configuration structure.
@@ -218,9 +220,10 @@ type IntegrationAMQPConfig struct {
 
 // IntegrationKNoTConfig holds the KNoT integration configuration.
 type IntegrationKNoTConfig struct {
-	UserToken               string `mapstructure:"user_token"`
-	URL                     string `mapstructure:"url"`
-	EventRoutingKeyTemplate string `mapstructure:"event_routing_key_template"`
+	UserToken               string            `mapstructure:"user_token"`
+	URL                     string            `mapstructure:"url"`
+	EventRoutingKeyTemplate string            `mapstructure:"event_routing_key_template"`
+	Devices                 []entities.Device `mapstructure:"devices"`
 }
 
 // IntegrationKafkaConfig holds the Kafka integration configuration.
