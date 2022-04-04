@@ -2,7 +2,7 @@ package entities
 
 // Config represents the thing's config
 type Config struct {
-	SensorID int    `json:"sensorId"`
-	Schema   Schema `json:"schema,omitempty"`
-	Event    Event  `json:"event,omitempty"`
+	SensorID int    `mapstructure: "sensorId" json:"sensorId"`
+	Schema   Schema `mapstructure: "schema" json:"schema,omitempty"`
+	Event    Event  `mapstructure: "event" json:"event,omitempty"`
 }
