@@ -2,12 +2,16 @@ package knot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"github.com/brocaar/chirpstack-application-server/internal/config"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/network"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 // Protocol interface provides methods to handle KNoT Protocol
@@ -19,6 +23,9 @@ type Protocol interface {
 	checkData(device entities.Device) error
 	checkDeviceConfiguration(device entities.Device) error
 	deviceExists(device entities.Device) bool
+	readDeviceFile(name string)
+	LoadDeviceOldContext()
+	writeDeviceFile(name string)
 }
 
 type networkWrapper struct {
@@ -46,7 +53,7 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 		log.WithFields(log.Fields{"integration": "knot"}).Error("Error connection to knot-cloud: %v", err)
 		return p, err
 	} else {
-		log.WithFields(log.Fields{"integration": "knot"}).Error("New connection to knot-cloud")
+		log.WithFields(log.Fields{"integration": "knot"}).Info("New connection to knot-cloud")
 	}
 
 	p.network.publisher = network.NewMsgPublisher(p.network.amqp)
@@ -58,6 +65,11 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 	}
 
 	p.mapDevices(conf.Devices)
+	p.LoadDeviceOldContext()
+	// devices, err := LoadDeviceOldContext()
+	// if err != nil {
+	// 	log.WithFields(log.Fields{"integration": "knot"}).Error(err)
+	// }
 
 	go handlerKnotAMQP(msgChan, deviceChan)
 	go dataControl(deviceChan, p)
@@ -69,7 +81,65 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 func (p *protocol) mapDevices(devices []entities.Device) {
 	p.devices = make(map[string]entities.Device)
 	for _, device := range devices {
-		p.devices[device.ID] = device
+		p.devices[device.Name] = device
+	}
+}
+
+//Load the device's configuration
+func (p *protocol) LoadDeviceOldContext() {
+	if ok := checkFile("/tmp/device/deviceConfig.yaml"); ok {
+		p.readDeviceFile("/tmp/device/deviceConfig.yaml")
+		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("existe")
+	} else {
+		p.writeDeviceFile("/tmp/device/deviceConfig.yaml")
+		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("Criando")
+	}
+}
+
+//check if the file exists
+func checkFile(name string) bool {
+	if _, err := os.Stat(name); err == nil {
+		// file exists
+		return true
+
+	} else if errors.Is(err, os.ErrNotExist) {
+		// file does *not* exist
+		return false
+	}
+	return false
+}
+
+//Read the device config file
+func (p *protocol) readDeviceFile(name string) {
+	var config map[string]entities.Device
+
+	yamlBytes, err := ioutil.ReadFile(name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	unmarshalErr := yaml.Unmarshal(yamlBytes, &config)
+	if unmarshalErr != nil {
+		log.Fatal(unmarshalErr)
+	}
+	for _, oldDevice := range config {
+		if curDevice, ok := p.devices[oldDevice.Name]; ok {
+			curDevice.Token = oldDevice.Token
+			p.devices[oldDevice.Name] = curDevice
+		}
+	}
+}
+
+// Write a file
+func (p *protocol) writeDeviceFile(name string) {
+	data, err := yaml.Marshal(p.devices)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(name, data, 0600)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -114,13 +184,13 @@ func (p *protocol) checkDeviceConfiguration(device entities.Device) error {
 // Update the knot device information on map
 func (p *protocol) updateDevice(device entities.Device) error {
 
-	if _, checkDevice := p.devices[device.ID]; !checkDevice {
+	if _, checkDevice := p.devices[device.Name]; !checkDevice {
 
 		log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("Device do not exist")
 		return fmt.Errorf("Device do not exist")
 	}
 
-	receiver := p.devices[device.ID]
+	receiver := p.devices[device.Name]
 
 	if p.checkDeviceConfiguration(device) == nil {
 		receiver.Config = device.Config
@@ -140,7 +210,18 @@ func (p *protocol) updateDevice(device entities.Device) error {
 	if device.Error != "" {
 		receiver.Error = device.Error
 	}
-	p.devices[device.ID] = receiver
+	p.devices[device.Name] = receiver
+
+	data, err := yaml.Marshal(&p.devices)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile("internal/config/device_config.yaml", data, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return nil
 }
 
@@ -156,11 +237,11 @@ func (p *protocol) createDevice(device entities.Device) error {
 	if device.State != "" {
 		return fmt.Errorf("device cannot be created, unknown source")
 	} else {
-		log.WithFields(log.Fields{"dev_eui": device.ID}).Info("Device created")
+		log.WithFields(log.Fields{"dev_name": device.Name}).Info("Device created")
 
 		device.State = entities.KnotNew
 
-		p.devices[device.ID] = device
+		p.devices[device.Name] = device
 
 		return nil
 	}
@@ -169,7 +250,7 @@ func (p *protocol) createDevice(device entities.Device) error {
 // Check if the device exists
 func (p *protocol) deviceExists(device entities.Device) bool {
 
-	if _, checkDevice := p.devices[device.ID]; checkDevice {
+	if _, checkDevice := p.devices[device.Name]; checkDevice {
 
 		return true
 	}
@@ -177,12 +258,12 @@ func (p *protocol) deviceExists(device entities.Device) bool {
 }
 
 // Delete the knot device from map
-func (p *protocol) deleteDevice(id string) error {
-	if _, d := p.devices[id]; !d {
+func (p *protocol) deleteDevice(name string) error {
+	if _, d := p.devices[name]; !d {
 		return fmt.Errorf("Device do not exist")
 	}
 
-	delete(p.devices, id)
+	delete(p.devices, name)
 	return nil
 }
 
@@ -207,7 +288,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 
 		if p.deviceExists(device) {
 
-			device = p.devices[device.ID]
+			device = p.devices[device.Name]
 
 			switch device.State {
 
@@ -278,7 +359,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 			case entities.KnotDelete:
 
 				if device.Token != "" {
-					err := p.deleteDevice(device.ID)
+					err := p.deleteDevice(device.Name)
 					if err != nil {
 						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 					} else {
@@ -302,7 +383,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 			// Just delete
 			case entities.KnotForceDelete:
 
-				err := p.deleteDevice(device.ID)
+				err := p.deleteDevice(device.Name)
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {

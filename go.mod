@@ -53,6 +53,7 @@ require (
 	google.golang.org/grpc v1.33.1
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
+	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
 
 // replace github.com/brocaar/chirpstack-api/go/v3 => ../chirpstack-api/go

@@ -16,6 +16,9 @@ RUN make
 
 FROM alpine:3.13.2 AS production
 
+RUN mkdir /tmp/device
+RUN chown -R nobody /tmp/device
+
 RUN apk --no-cache add ca-certificates
 COPY --from=development /chirpstack-application-server/build/chirpstack-application-server /usr/bin/chirpstack-application-server
 USER nobody:nogroup
