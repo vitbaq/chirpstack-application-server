@@ -9,7 +9,12 @@ const (
 	KnotOk                 = "readToSendData"
 	KnotAuth               = "authenticated"
 	KnotError              = "error"
-	KnotWait               = "waitResponse"
+	KnotWaitReg            = "waitRegisterResponse"
+	KnotWaitAuth           = "waitAutheResponse"
+	KnotWaitConfig         = "waitConfigResponse"
+	KnotOff                = "ignoreDevice"
+	KnotAlreadyReg         = "alreadyRegistered"
+	KnotWaitUnreg          = "waitUnregister"
 )
 
 // Device represents the device domain entity
