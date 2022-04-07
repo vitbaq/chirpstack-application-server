@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/brocaar/chirpstack-application-server/internal/config"
 	"github.com/brocaar/chirpstack-application-server/internal/integration/knot/entities"
@@ -19,13 +20,15 @@ type Protocol interface {
 	Close() error
 	createDevice(device entities.Device) error
 	deleteDevice(id string) error
-	updateDevice(device entities.Device) error
+	updateDevice(device entities.Device)
 	checkData(device entities.Device) error
 	checkDeviceConfiguration(device entities.Device) error
 	deviceExists(device entities.Device) bool
 	readDeviceFile(name string)
 	LoadDeviceOldContext()
 	writeDeviceFile(name string)
+	checkTimeout(device entities.Device) entities.Device
+	findDeviceById(id string) string
 }
 
 type networkWrapper struct {
@@ -70,18 +73,26 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 	// if err != nil {
 	// 	log.WithFields(log.Fields{"integration": "knot"}).Error(err)
 	// }
-
+	go registerDevices(p.devices, deviceChan)
 	go handlerKnotAMQP(msgChan, deviceChan)
 	go dataControl(deviceChan, p)
 
 	return p, nil
 }
 
+//Teste Device
+func registerDevices(devices map[string]entities.Device, deviceChan chan entities.Device) {
+	for _, device := range devices {
+		device.State = entities.KnotNew
+		deviceChan <- device
+	}
+}
+
 //Map the knot devices from the config file array
 func (p *protocol) mapDevices(devices []entities.Device) {
 	p.devices = make(map[string]entities.Device)
 	for _, device := range devices {
-		p.devices[device.Name] = device
+		p.devices[device.ID] = device
 	}
 }
 
@@ -123,9 +134,9 @@ func (p *protocol) readDeviceFile(name string) {
 		log.Fatal(unmarshalErr)
 	}
 	for _, oldDevice := range config {
-		if curDevice, ok := p.devices[oldDevice.Name]; ok {
+		if curDevice, ok := p.devices[oldDevice.ID]; ok {
 			curDevice.Token = oldDevice.Token
-			p.devices[oldDevice.Name] = curDevice
+			p.devices[oldDevice.ID] = curDevice
 		}
 	}
 }
@@ -182,15 +193,9 @@ func (p *protocol) checkDeviceConfiguration(device entities.Device) error {
 }
 
 // Update the knot device information on map
-func (p *protocol) updateDevice(device entities.Device) error {
+func (p *protocol) updateDevice(device entities.Device) {
 
-	if _, checkDevice := p.devices[device.Name]; !checkDevice {
-
-		log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("Device do not exist")
-		return fmt.Errorf("Device do not exist")
-	}
-
-	receiver := p.devices[device.Name]
+	receiver := p.devices[device.ID]
 
 	if p.checkDeviceConfiguration(device) == nil {
 		receiver.Config = device.Config
@@ -210,19 +215,10 @@ func (p *protocol) updateDevice(device entities.Device) error {
 	if device.Error != "" {
 		receiver.Error = device.Error
 	}
-	p.devices[device.Name] = receiver
+	p.devices[device.ID] = receiver
 
-	data, err := yaml.Marshal(&p.devices)
-	if err != nil {
-		log.Fatal(err)
-	}
+	p.writeDeviceFile("/tmp/device/deviceConfig.yaml")
 
-	err = os.WriteFile("internal/config/device_config.yaml", data, 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return nil
 }
 
 // Close closes the protocol.
@@ -241,7 +237,7 @@ func (p *protocol) createDevice(device entities.Device) error {
 
 		device.State = entities.KnotNew
 
-		p.devices[device.Name] = device
+		p.devices[device.ID] = device
 
 		return nil
 	}
@@ -250,7 +246,7 @@ func (p *protocol) createDevice(device entities.Device) error {
 // Check if the device exists
 func (p *protocol) deviceExists(device entities.Device) bool {
 
-	if _, checkDevice := p.devices[device.Name]; checkDevice {
+	if _, checkDevice := p.devices[device.ID]; checkDevice {
 
 		return true
 	}
@@ -267,137 +263,148 @@ func (p *protocol) deleteDevice(name string) error {
 	return nil
 }
 
+//init the timeout couter
+func initTimeout(deviceChan chan entities.Device, device entities.Device) {
+	go func(deviceChan chan entities.Device, device entities.Device) {
+		time.Sleep(20 * time.Second)
+		device.Error = "timeOut"
+		deviceChan <- device
+	}(deviceChan, device)
+}
+
+//Find device name by Id
+func (p *protocol) findDeviceById(id string) string {
+	for _, device := range p.devices {
+		if device.ID == id {
+			return device.Name
+		}
+	}
+	return ""
+}
+
+//check if response was received by comparing previous state with the new one
+func (p *protocol) checkTimeout(device entities.Device) entities.Device {
+	curDevice := p.devices[device.ID]
+	if device.Error == "timeOut" {
+		if (device.State == entities.KnotNew && curDevice.State == entities.KnotWaitReg) ||
+			(device.State == entities.KnotRegistered && curDevice.State == entities.KnotWaitAuth) ||
+			(device.State == entities.KnotAuth && curDevice.State == entities.KnotWaitConfig) ||
+			(device.State == entities.KnotAlreadyReg && curDevice.State == entities.KnotWaitUnreg) {
+			log.WithFields(log.Fields{"dev_name": device.Name}).Error("TimeOut")
+		} else {
+			device.State = entities.KnotOff
+			return device
+		}
+	}
+	return device
+}
+
 // Control device paths.
 func dataControl(deviceChan chan entities.Device, p *protocol) {
 	for device := range deviceChan {
 
-		// Creates a new device if it doesn't exist
 		if p.deviceExists(device) {
-			err := p.updateDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			}
-		} else {
-			err := p.createDevice(device)
-			if err != nil {
-				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-			} else {
-				log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("Device created")
-			}
-		}
+			device = p.checkTimeout(device)
+			if device.State != entities.KnotOff && device.Error != "timeOut" {
 
-		if p.deviceExists(device) {
+				p.updateDevice(device)
+				device = p.devices[device.ID]
 
-			device = p.devices[device.Name]
+				if device.Name == "" {
+					log.Fatalln("Device has no name")
+				} else if device.State == entities.KnotNew {
+					if device.Token != "" {
+						device.State = entities.KnotRegistered
+					}
+				}
+			} else if device.Error == "timeOut" {
+				device.Error = ""
+			}
+			log.WithFields(log.Fields{" knot": "STATE "}).Info(device.State)
 
 			switch device.State {
 
 			// If the device status is new, request a device registration
 			case entities.KnotNew:
 
-				device.State = entities.KnotWait
-				err := p.updateDevice(device)
+				initTimeout(deviceChan, device)
+				device.State = entities.KnotWaitReg
+				p.updateDevice(device)
+				err := p.network.publisher.PublishDeviceRegister(p.userToken, &device)
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
-					err = p.network.publisher.PublishDeviceRegister(p.userToken, &device)
-					if err != nil {
-						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
-					}
+					log.WithFields(log.Fields{"knot": entities.KnotNew}).Info("send a register request")
 				}
 			// If the device is already registered, ask for device authentication
 			case entities.KnotRegistered:
-				device.State = entities.KnotWait
-				err := p.updateDevice(device)
+				initTimeout(deviceChan, device)
+				device.State = entities.KnotWaitAuth
+				p.updateDevice(device)
+				err := p.network.publisher.PublishDeviceAuth(p.userToken, &device)
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
-					err = p.network.publisher.PublishDeviceAuth(p.userToken, &device)
-					if err != nil {
-						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
-					}
+					log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
 				}
 			// Now the device has a token, make a new request for authentication.
 			case entities.KnotAuth:
-				device.State = entities.KnotWait
-				err := p.updateDevice(device)
+				initTimeout(deviceChan, device)
+				device.State = entities.KnotWaitConfig
+				p.updateDevice(device)
+				err := p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
-					err = p.network.publisher.PublishDeviceUpdateConfig(p.userToken, &device)
-					if err != nil {
-						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
-					}
+					log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new configuration")
 				}
+
 			// Send the new data that comes from the device to Knot Cloud
 			case entities.KnotOk:
 				err := p.checkData(device)
 				if err != nil {
-					log.WithFields(log.Fields{"debug": "true", "Update Device": "Error"}).Error("invalid data")
+					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
 					err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
 					if err != nil {
 						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 					} else {
 						device.Data = nil
-						err = p.updateDevice(device)
-						if err != nil {
-							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-						} else {
-							log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
-						}
+						p.updateDevice(device)
+						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
 					}
 				}
 
-			// Check if the device has a token, if it does, delete it, if not, resend the registration request
-			case entities.KnotDelete:
+			// Check if the device has a token, go to authentication, if not,  unregister
+			case entities.KnotAlreadyReg:
 
-				if device.Token != "" {
-					err := p.deleteDevice(device.Name)
+				if device.Token == "" {
+					initTimeout(deviceChan, device)
+					device.State = entities.KnotWaitUnreg
+					p.updateDevice(device)
+					err := p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
 					if err != nil {
 						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 					} else {
-						log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
+						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send a unregister request")
 					}
 				} else {
-					device.State = entities.KnotWait
-					err := p.updateDevice(device)
+					device.State = entities.KnotRegistered
+					initTimeout(deviceChan, device)
+					device.State = entities.KnotWaitAuth
+					p.updateDevice(device)
+					err := p.network.publisher.PublishDeviceAuth(p.userToken, &device)
 					if err != nil {
 						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 					} else {
-						err = p.network.publisher.PublishDeviceRegister(p.userToken, &device)
-						if err != nil {
-							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-						} else {
-							log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("send a register request")
-						}
+						log.WithFields(log.Fields{"knot": entities.KnotRegistered}).Info("send a auth request")
 					}
-				}
-
-			// Just delete
-			case entities.KnotForceDelete:
-
-				err := p.deleteDevice(device.Name)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				} else {
-					log.WithFields(log.Fields{"knot": entities.KnotDelete}).Info("delete a device")
 				}
 
 			// Handle errors
 			case entities.KnotError:
 				switch device.Error {
 				// If the device is new to the chirpstack platform, but already has a registration in Knot, first the device needs to ask to unregister and then ask for a registration.
-				case "thing is already registered":
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
-					p.network.publisher.PublishDeviceUnregister(p.userToken, &device)
-
 				case "thing's config not provided":
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("device is registered, but does not have a token; send a unregister request")
 
@@ -405,15 +412,15 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error("ERROR WITHOUT HANDLER" + device.Error)
 
 				}
-				device.State = entities.KnotWait
+				device.State = entities.KnotOff
 				device.Error = ""
-				err := p.updateDevice(device)
-				if err != nil {
-					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-				}
-			case entities.KnotWait:
+				p.updateDevice(device)
+			case entities.KnotOff:
 
 			}
+		} else {
+			log.WithFields(log.Fields{"knot": entities.KnotError}).Error("Device not find" + device.Error)
+
 		}
 	}
 }
@@ -447,7 +454,10 @@ func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Devi
 			device.ID = receiver.ID
 			device.Name = receiver.Name
 
-			if receiver.Error != "" {
+			if receiver.Error == "thing is already registered" {
+				device.State = entities.KnotAlreadyReg
+				deviceChan <- device
+			} else if receiver.Error != "" {
 				// Alread registered
 				log.WithFields(log.Fields{"amqp": "knot"}).Info("received a registration response with a error")
 				deviceChan <- errorFormat(device, receiver.Error)
@@ -469,7 +479,7 @@ func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Devi
 				log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 			} else {
 				device.ID = receiver.ID
-				device.State = entities.KnotDelete
+				device.State = entities.KnotNew
 				deviceChan <- device
 			}
 
