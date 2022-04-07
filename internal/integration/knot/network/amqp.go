@@ -13,6 +13,7 @@ const (
 	exchangeTypeFanout = "fanout"
 
 	exchangeDevice      = "device"
+	exchangeSent        = "data.sent"
 	ReplyToAuthMessages = "chirpstack-auth-rpc"
 )
 
