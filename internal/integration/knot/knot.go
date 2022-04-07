@@ -38,7 +38,7 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 }
 
 // Formatting all the information needed to configure a knot device
-func formatDevice(DevEui []byte, deviceName string, config map[string]string, ObjectJson string) entities.Device {
+func formatDevice(DevEui []byte, deviceName string, ObjectJson string) entities.Device {
 
 	device := entities.Device{}
 	DevEUI_str := []byte("")
@@ -61,7 +61,7 @@ func formatDevice(DevEui []byte, deviceName string, config map[string]string, Ob
 func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.UplinkEvent) error {
 
 	log.WithFields(log.Fields{"event": "uplink"}).Info("New uplink")
-	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags, pl.ObjectJson)
+	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.ObjectJson)
 
 	return nil
 }
@@ -70,7 +70,7 @@ func (i *Integration) HandleUplinkEvent(ctx context.Context, _ models.Integratio
 func (i *Integration) HandleJoinEvent(ctx context.Context, _ models.Integration, vars map[string]string, pl pb.JoinEvent) error {
 
 	log.WithFields(log.Fields{"event": "join"}).Info("New join")
-	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, pl.Tags, "")
+	deviceChan <- formatDevice(pl.DevEui, pl.DeviceName, "")
 
 	return nil
 }
