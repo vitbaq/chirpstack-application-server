@@ -53,7 +53,6 @@ func formatDevice(DevEui []byte, deviceName string, ObjectJson string) entities.
 	if ObjectJson != "" {
 		json.Unmarshal([]byte(ObjectJson), &device)
 	}
-
 	return device
 }
 
