@@ -11,6 +11,16 @@ type DeviceRegisterRequest struct {
 }
 
 // DeviceRegisteredResponse represents the incoming register device response message
+type DeviceMessage struct {
+	ID     string            `json:"id,omitempty"`
+	Name   string            `json:"name,omitempty"`
+	Token  string            `json:"token,omitempty"`
+	Config []entities.Config `json:"config,omitempty"`
+	Data   []entities.Data   `json:"data,omitempty"`
+	Error  string            `json:"error,omitempty"`
+}
+
+// DeviceRegisteredResponse represents the incoming register device response message
 type DeviceRegisteredResponse struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
