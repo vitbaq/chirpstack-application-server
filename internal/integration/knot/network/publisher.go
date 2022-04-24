@@ -9,7 +9,6 @@ const (
 	routingKeyUnregister   = "device.unregister"
 	routingKeyAuth         = "device.auth"
 	routingKeyUpdateConfig = "device.config.sent"
-	routingKeyDataSent     = "data.sent"
 
 	defaultCorrelationID = "default-corrId"
 
@@ -121,8 +120,9 @@ func (mp *msgPublisher) PublishDeviceData(userToken string, device *entities.Dev
 		ID:   device.ID,
 		Data: data,
 	}
-
-	err := mp.amqp.PublishPersistentMessage("data.published", exchangeTypeFanout, "", message, &options)
+  
+	err := mp.amqp.PublishPersistentMessage(exchangeSent, exchangeTypeFanout, "", message, &options)
+  
 	if err != nil {
 		return err
 	}

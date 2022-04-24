@@ -326,11 +326,9 @@ func (p *protocol) sendKnotRequests(deviceChan chan entities.Device, oldState, c
 		p.updateDevice(device)
 	}
 }
-
 // Control device paths.
 func dataControl(deviceChan chan entities.Device, p *protocol) {
 	for device := range deviceChan {
-
 		if p.deviceExists(device) {
 			device = p.checkTimeout(device)
 			if device.State != entities.KnotOff && device.Error != "timeOut" {
@@ -408,7 +406,6 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 			}
 		} else {
 			log.WithFields(log.Fields{"knot": entities.KnotError}).Error("Device not find" + device.Error)
-
 		}
 	}
 }
@@ -458,13 +455,12 @@ func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Devi
 
 		// Registered msg from knot
 		case network.BindingKeyRegistered:
-
+      
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a registration response")
 			deviceChan <- amqpReceiver(message.Body, entities.KnotRegistered)
 
 		// Unregistered
 		case network.BindingKeyUnregistered:
-
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a unregistration response")
 			deviceChan <- amqpReceiver(message.Body, entities.KnotNew)
 
@@ -473,12 +469,11 @@ func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Devi
 
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a authentication response")
 			deviceChan <- amqpReceiver(message.Body, entities.KnotAuth)
-
+      
 		case network.BindingKeyUpdatedConfig:
 
 			log.WithFields(log.Fields{"amqp": "knot"}).Info("received a config update response")
 			deviceChan <- amqpReceiver(message.Body, entities.KnotOk)
-
 		}
 	}
 }
