@@ -233,7 +233,8 @@ func (p *protocol) createDevice(device entities.Device) error {
 	if device.State != "" {
 		return fmt.Errorf("device cannot be created, unknown source")
 	} else {
-		log.WithFields(log.Fields{"dev_name": device.Name}).Info("Device created")
+
+		log.WithFields(log.Fields{"dev_eui": device.ID}).Info("Device created")
 
 		device.State = entities.KnotNew
 
@@ -302,7 +303,6 @@ func (p *protocol) checkTimeout(device entities.Device) entities.Device {
 // Control device paths.
 func dataControl(deviceChan chan entities.Device, p *protocol) {
 	for device := range deviceChan {
-
 		if p.deviceExists(device) {
 			device = p.checkTimeout(device)
 			if device.State != entities.KnotOff && device.Error != "timeOut" {
@@ -420,7 +420,6 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 			}
 		} else {
 			log.WithFields(log.Fields{"knot": entities.KnotError}).Error("Device not find" + device.Error)
-
 		}
 	}
 }
@@ -480,7 +479,7 @@ func handlerKnotAMQP(msgChan <-chan network.InMsg, deviceChan chan entities.Devi
 			} else {
 				device.ID = receiver.ID
 				device.State = entities.KnotNew
-				deviceChan <- device
+
 			}
 
 		// Receive a auth msg
