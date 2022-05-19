@@ -2,8 +2,8 @@ package knot
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
-	"strconv"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -41,13 +41,8 @@ func New(m marshaler.Type, conf config.IntegrationKNoTConfig) (*Integration, err
 func formatDevice(DevEui []byte, deviceName string, ObjectJson string) entities.Device {
 
 	device := entities.Device{}
-	DevEUI_str := []byte("")
 
-	for _, v := range DevEui {
-		DevEUI_str = strconv.AppendInt(DevEUI_str, int64(v), 16)
-	}
-
-	device.ID = string(DevEUI_str)
+	device.ID = hex.EncodeToString(DevEui[:])
 	device.Name = deviceName
 
 	if ObjectJson != "" {
