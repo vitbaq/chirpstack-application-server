@@ -330,7 +330,7 @@ func (p *protocol) sendKnotRequests(deviceChan chan entities.Device, oldState, c
 // Control device paths.
 func dataControl(deviceChan chan entities.Device, p *protocol) {
 	for device := range deviceChan {
-
+		log.Info("Recebido : " + device.ID)
 		if p.deviceExists(device) {
 			device = p.checkTimeout(device)
 			if device.State != entities.KnotOff && device.Error != "timeOut" {
