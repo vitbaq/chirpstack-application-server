@@ -374,13 +374,18 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
-					err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
-					if err != nil {
-						log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-					} else {
-						device.Data = nil
-						p.updateDevice(device)
-						log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
+					datas := device.Data
+					device.Data = nil
+					for _, data := range datas {
+						device.Data = append(device.Data, data)
+						err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
+						if err != nil {
+							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+						} else {
+							device.Data = nil
+							p.updateDevice(device)
+							log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
+						}
 					}
 				}
 
