@@ -24,8 +24,11 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway v1.12.1
 	github.com/jmoiron/sqlx v1.2.0
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/mmcloughlin/geohash v0.9.0
+	github.com/naoina/go-stringutil v0.1.0 // indirect
+	github.com/naoina/toml v0.1.1
 	github.com/pelletier/go-toml v1.6.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
@@ -53,7 +56,7 @@ require (
 	google.golang.org/grpc v1.33.1
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
-	gopkg.in/yaml.v2 v2.3.0 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 )
 
 // replace github.com/brocaar/chirpstack-api/go/v3 => ../chirpstack-api/go
