@@ -30,6 +30,7 @@ type Protocol interface {
 	checkTimeout(device entities.Device) entities.Device
 	findDeviceById(id string) string
 	sendKnotRequests(deviceChan chan entities.Device, oldState, curState string, device entities.Device)
+	PublishData(device entities.Device)
 }
 
 type networkWrapper struct {
@@ -374,19 +375,7 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 				if err != nil {
 					log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
 				} else {
-					datas := device.Data
-					device.Data = nil
-					for _, data := range datas {
-						device.Data = append(device.Data, data)
-						err = p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
-						if err != nil {
-							log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
-						} else {
-							device.Data = nil
-							p.updateDevice(device)
-							log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
-						}
-					}
+					p.PublishData(device)
 				}
 
 			// Check if the device has a token, go to authentication, if not,  unregister
@@ -411,6 +400,25 @@ func dataControl(deviceChan chan entities.Device, p *protocol) {
 		} else {
 			log.WithFields(log.Fields{"knot": entities.KnotError}).Error("Device not find" + device.Error)
 
+		}
+	}
+}
+
+//Post each message at a time
+func (p *protocol) PublishData(device entities.Device) {
+	// take all data from the device
+	data := device.Data
+	device.Data = nil
+	for _, register := range data {
+		//send each data at a time
+		device.Data = append(device.Data, register)
+		err := p.network.publisher.PublishDeviceData(p.userToken, &device, device.Data)
+		if err != nil {
+			log.WithFields(log.Fields{"knot": entities.KnotError}).Error(err)
+		} else {
+			device.Data = nil
+			p.updateDevice(device)
+			log.WithFields(log.Fields{"knot": entities.KnotAuth}).Info("send the new data comes from the device")
 		}
 	}
 }
