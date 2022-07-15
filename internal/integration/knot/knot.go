@@ -42,7 +42,7 @@ func formatDevice(DevEui []byte, deviceName string, ObjectJson string) entities.
 
 	device := entities.Device{}
 
-	device.ID = hex.EncodeToString(DevEui[:])
+	device.DevEUI = hex.EncodeToString(DevEui[:])
 	device.Name = deviceName
 
 	if ObjectJson != "" {
