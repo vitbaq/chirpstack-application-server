@@ -222,6 +222,7 @@ type IntegrationAMQPConfig struct {
 type IntegrationKNoTConfig struct {
 	UserToken               string            `mapstructure:"user_token"`
 	URL                     string            `mapstructure:"url"`
+	Name                    string            `mapstructure:"name"`
 	EventRoutingKeyTemplate string            `mapstructure:"event_routing_key_template"`
 	Devices                 []entities.Device `mapstructure:"devices"`
 }
