@@ -35,6 +35,7 @@ type Protocol interface {
 	publishData(device entities.Device)
 	generateID(device entities.Device) entities.Device
 	validateKnotDevice(device entities.Device) entities.Device
+
 }
 
 type networkWrapper struct {
@@ -225,7 +226,7 @@ func (p *protocol) updateDevice(device entities.Device) {
 	if device.Error != "" {
 		receiver.Error = device.Error
 	}
-
+  
 	if device.Data == nil {
 		receiver.Data = nil
 	} else if p.checkData(device) == nil {
@@ -391,7 +392,7 @@ func (p *protocol) validateKnotDevice(device entities.Device) entities.Device {
 			} else if device.State == values.KNoTNew && device.Token != "" {
 				device.State = values.KNoTRegistered
 			}
-
+      
 		} else if device.Error == values.ErrorTimeOut {
 			device.Error = values.NoError
 		}
