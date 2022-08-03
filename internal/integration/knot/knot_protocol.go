@@ -83,7 +83,7 @@ func newProtocol(conf config.IntegrationKNoTConfig, deviceChan chan entities.Dev
 	return p, nil
 }
 
-//Teste Device
+//Test Device
 func registerDevices(devices map[string]entities.Device, deviceChan chan entities.Device) {
 	for _, device := range devices {
 		device.State = values.KNoTNew
@@ -91,7 +91,7 @@ func registerDevices(devices map[string]entities.Device, deviceChan chan entitie
 	}
 }
 
-//Map the knot devices from the config file array
+//Map the knot devices from the config file existsarray
 func (p *protocol) mapDevices(devices []entities.Device) {
 	p.devices = make(map[string]entities.Device)
 	for _, device := range devices {
@@ -103,11 +103,11 @@ func (p *protocol) mapDevices(devices []entities.Device) {
 
 //Load the device's configuration
 func (p *protocol) LoadDeviceOldContext() {
-	if ok := checkFile("/etc/knot/deviceContex.yaml"); ok {
-		p.readDeviceFile("/etc/knot/deviceContex.yaml")
+	if ok := checkFile(values.DeviceContex); ok {
+		p.readDeviceFile(values.DeviceContex)
 		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("exists")
 	} else {
-		p.writeDeviceFile("/etc/knot/deviceContex.yaml")
+		p.writeDeviceFile(values.DeviceContex)
 		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("create")
 	}
 }
@@ -156,7 +156,7 @@ func (p *protocol) writeDeviceFile(pathFile string) {
 		log.Fatal(err)
 	}
 
-	err = os.WriteFile(pathFile, data, 0644)
+	err = os.WriteFile(pathFile, data, values.RW_R__R__)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -164,42 +164,64 @@ func (p *protocol) writeDeviceFile(pathFile string) {
 
 // Check for data to be updated
 func (p *protocol) checkData(device entities.Device) error {
-	var ok bool
-	id_pass := 0
-	// Check if the ids are correct, no repetition
-	for _, data := range device.Data {
-		if data.SensorID != id_pass {
-			id_pass = data.SensorID
-			ok = true
-		} else {
-			ok = false
-		}
-	}
-	if ok {
+
+	if device.Data == nil {
 		return nil
 	}
-	return fmt.Errorf("invalid Data")
+
+	sliceSize := len(device.Data)
+	j := 0
+	for i, data := range device.Data {
+		if data.Value == "" {
+			return fmt.Errorf("invalid sensor value")
+		} else if data.Timestamp == "" {
+			return fmt.Errorf("invalid sensor timestamp")
+		}
+
+		j = i + 1
+		for j < sliceSize {
+			if data.SensorID == device.Data[j].SensorID {
+				return fmt.Errorf("repeated sensor id")
+			}
+			j++
+		}
+	}
+
+	return nil
+}
+
+func isInvalidValueType(valueType int) bool {
+	minValueTypeAllow := 1
+	maxValueTypeAllow := 5
+	return valueType < minValueTypeAllow || valueType > maxValueTypeAllow
 }
 
 // Check for device configuration
 func (p *protocol) checkDeviceConfiguration(device entities.Device) error {
-	var ok bool
-	id_pass := -1
+	sliceSize := len(device.Config)
+	j := 0
+
+	if device.Config == nil {
+		return fmt.Errorf("sensor has no configuration")
+	}
+
 	// Check if the ids are correct, no repetition
-	for _, data := range device.Config {
-		if data.Schema.ValueType < 1 || data.Schema.ValueType > 5 {
-			return fmt.Errorf(fmt.Sprint(data.SensorID) + "invalid valueType")
-		} else if data.SensorID != id_pass {
-			id_pass = data.SensorID
-			ok = true
-		} else {
-			ok = false
+	for i, config := range device.Config {
+		if isInvalidValueType(config.Schema.ValueType) {
+			return fmt.Errorf("invalid sensor id")
+		}
+
+		j = i + 1
+		for j < sliceSize {
+			if config.SensorID == device.Config[j].SensorID {
+				return fmt.Errorf("repeated sensor id")
+			}
+			j++
 		}
 	}
-	if ok {
-		return nil
-	}
-	return fmt.Errorf("invalid Config")
+
+	return nil
+
 }
 
 // Update the knot device information on map
@@ -226,15 +248,9 @@ func (p *protocol) updateDevice(device entities.Device) {
 		receiver.Error = device.Error
 	}
 
-	if device.Data == nil {
-		receiver.Data = nil
-	} else if p.checkData(device) == nil {
-		receiver.Data = device.Data
-	}
-
 	p.devices[device.DevEUI] = receiver
 
-	p.writeDeviceFile("/etc/knot/deviceContex.yaml")
+	p.writeDeviceFile(values.DeviceContex)
 
 }
 
@@ -304,10 +320,7 @@ func (p *protocol) findDeviceById(id string) string {
 func (p *protocol) checkTimeout(device entities.Device) entities.Device {
 	curDevice := p.devices[device.DevEUI]
 	if device.Error == values.ErrorTimeOut {
-		if (device.State == values.KNoTNew && curDevice.State == values.KNoTWaitReg) ||
-			(device.State == values.KNoTRegistered && curDevice.State == values.KNoTWaitAuth) ||
-			(device.State == values.KNoTAuth && curDevice.State == values.KNoTWaitConfig) ||
-			(device.State == values.KNoTAlreadyReg && curDevice.State == values.KNoTWaitUnreg) {
+		if verifyIfStateChange(device, curDevice) {
 			log.WithFields(log.Fields{"dev_name": device.Name}).Error("TimeOut")
 		} else {
 			device.State = values.KNoTOff
@@ -315,6 +328,14 @@ func (p *protocol) checkTimeout(device entities.Device) entities.Device {
 		}
 	}
 	return device
+}
+
+// Verify is the current device still in the same state as when the timeout was started
+func verifyIfStateChange(deviceBeforeTimeout, currentDevice entities.Device) bool {
+	return (deviceBeforeTimeout.State == values.KNoTNew && currentDevice.State == values.KNoTWaitReg) ||
+		(deviceBeforeTimeout.State == values.KNoTRegistered && currentDevice.State == values.KNoTWaitAuth) ||
+		(deviceBeforeTimeout.State == values.KNoTAuth && currentDevice.State == values.KNoTWaitConfig) ||
+		(deviceBeforeTimeout.State == values.KNoTAlreadyReg && currentDevice.State == values.KNoTWaitUnreg)
 }
 
 // Send request to amqp knot
@@ -374,7 +395,7 @@ func (p *protocol) validateKnotDevice(device entities.Device) entities.Device {
 	if device.DevEUI == "" && device.ID == "" {
 		device.State = values.KNoTOff
 		return device
-	} else if device.ID != "" {
+	} else if device.DevEUI == "" && device.ID != "" {
 		device.DevEUI = p.findDeviceById(device.ID)
 	}
 
