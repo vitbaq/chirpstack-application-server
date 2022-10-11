@@ -3,8 +3,10 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
 
@@ -161,12 +163,38 @@ func (a *AMQP) PublishPersistentMessage(exchange, exchangeType, key string, data
 
 func (a *AMQP) notifyWhenClosed() {
 	errReason := <-a.conn.NotifyClose(make(chan *amqp.Error))
+
+	reconnectionBackOff := backoff.NewExponentialBackOff()
+	reconnectionBackOff.InitialInterval = 30 * time.Second
+	reconnectionBackOff.MaxInterval = 5 * time.Minute
+	reconnectionBackOff.Multiplier = 1.7
+	reconnectionBackOff.MaxElapsedTime = 0
+
+	reconnection := func() error {
+		conn, err := amqp.Dial(a.url)
+		if err != nil {
+			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
+			return err
+		}
+
+		a.conn = conn
+		channel, err := a.conn.Channel()
+		if err != nil {
+			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
+			return err
+		}
+		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("Conectado")
+		a.channel = channel
+
+		return nil
+	}
+
 	if errReason != nil {
-		err := backoff.Retry(a.connect, backoff.NewExponentialBackOff())
+		log.Errorln(errReason)
+		err := backoff.Retry(reconnection, reconnectionBackOff)
 		if err != nil {
 			return
 		}
-
 		go a.notifyWhenClosed()
 	}
 }
