@@ -162,28 +162,31 @@ func (a *AMQP) PublishPersistentMessage(exchange, exchangeType, key string, data
 }
 
 func (a *AMQP) notifyWhenClosed() {
+
 	errReason := <-a.conn.NotifyClose(make(chan *amqp.Error))
+	//Internal funcion of backoff package
+	//randomized interval = Multiplier * RetryInterval * (random value in range [1 - RandomizationFactor, 1 + RandomizationFactor])
 
 	reconnectionBackOff := backoff.NewExponentialBackOff()
 	reconnectionBackOff.InitialInterval = 30 * time.Second
 	reconnectionBackOff.MaxInterval = 5 * time.Minute
-	reconnectionBackOff.Multiplier = 1.7
-	reconnectionBackOff.MaxElapsedTime = 0
+	reconnectionBackOff.Multiplier = 1.7   //the multiplier used to extend the random RetryInterval value
+	reconnectionBackOff.MaxElapsedTime = 0 // never stop to try reentry
 
 	reconnection := func() error {
 		conn, err := amqp.Dial(a.url)
 		if err != nil {
-			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
+			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Error on Dial func, cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
 			return err
 		}
 
 		a.conn = conn
 		channel, err := a.conn.Channel()
 		if err != nil {
-			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
+			log.WithFields(log.Fields{"integration": "ConfigFile"}).Error("Error to get a channel, cannot connect to KNoT: ", err, "Will retry after", reconnectionBackOff.NextBackOff()/time.Second, "seconds")
 			return err
 		}
-		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("Conectado")
+		log.WithFields(log.Fields{"integration": "ConfigFile"}).Info("Reconnection to KNoT amqp was successful")
 		a.channel = channel
 
 		return nil
