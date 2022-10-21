@@ -167,11 +167,15 @@ func (a *AMQP) notifyWhenClosed() {
 	//Internal funcion of backoff package
 	//randomized interval = Multiplier * RetryInterval * (random value in range [1 - RandomizationFactor, 1 + RandomizationFactor])
 
+	inicialIntervalSecond := 30 * time.Second
+	maxIntervalInMinutes := 5 * time.Minute
+	intervalMultiplier := 1.7
+	neverStopTryReconnection := time.Duration(0)
 	reconnectionBackOff := backoff.NewExponentialBackOff()
-	reconnectionBackOff.InitialInterval = 30 * time.Second
-	reconnectionBackOff.MaxInterval = 5 * time.Minute
-	reconnectionBackOff.Multiplier = 1.7   //the multiplier used to extend the random RetryInterval value
-	reconnectionBackOff.MaxElapsedTime = 0 // never stop to try reentry
+	reconnectionBackOff.InitialInterval = inicialIntervalSecond
+	reconnectionBackOff.MaxInterval = maxIntervalInMinutes
+	reconnectionBackOff.Multiplier = intervalMultiplier
+	reconnectionBackOff.MaxElapsedTime = neverStopTryReconnection
 
 	reconnection := func() error {
 		conn, err := amqp.Dial(a.url)
